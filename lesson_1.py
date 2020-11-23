@@ -1,5 +1,6 @@
 import time
 import json
+import os
 import requests as rq
 
 def get_url(url, params):
@@ -26,6 +27,8 @@ def parse(start_url, params):
             params = {}
     return data_list
 
+path = os.getcwd()+'/categories'
+os.mkdir(path)
 
 category_url = 'https://5ka.ru/api/v2/categories/'
 url = 'https://5ka.ru/api/v2/special_offers/?store=&records_per_page=12&page=1&categories=&ordering=&price_promo__gte=&price_promo__lte=&search='
