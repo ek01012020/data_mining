@@ -25,9 +25,10 @@ class MagnitParser:
                 time.sleep(0.25)
 
     def create_price(self, product, attr_class: str):
-        price = product.find(class_=attr_class).text.split('\n')
-        price = [el for el in price if el.isdigit()]
-        return float('.'.join(price))
+        if product.find(class_=attr_class):
+            return float('.'.join([el for el in product.find(class_=attr_class).text.split('\n') if el.isdigit()]))
+        else:
+            return float(0)
 
     def sale_date(self, arg):
         sale_date = arg.find('div', class_='card-sale__date').text.split('\n')
@@ -37,6 +38,8 @@ class MagnitParser:
         date_str = arg.split()
         date_str[0] = str(datetime.date.today().year)
         date_str[2] = date_str[2][0:3]
+        if date_str[2] == 'мая':
+            date_str[2] = 'май'
         date_str = ','.join(date_str)
         date_fmt = '%Y,%d,%b'
         return datetime.datetime.strptime(date_str, date_fmt)
@@ -57,7 +60,7 @@ class MagnitParser:
                     'date_to': self.create_date(self.sale_date(product).pop()),
                 }
                 yield pr_data
-            except AttributeError:
+            except (AttributeError, ValueError):
                 continue
 
     def run(self):
