@@ -6,8 +6,14 @@
 
 # useful for handling different item types with a single interface
 from itemadapter import ItemAdapter
-
+from pymongo import MongoClient
 
 class GbParsePipeline:
+
+    def __init__(self):
+        self.db = MongoClient('mongodb+srv://Helen:helen911@cluster0.lb92d.mongodb.net/')['parser_hh']
+
     def process_item(self, item, spider):
+        collection = self.db[spider.name]
+        collection.insert_one(item)
         return item
