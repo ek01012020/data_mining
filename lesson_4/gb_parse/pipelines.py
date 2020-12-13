@@ -23,7 +23,7 @@ class GbParsePipeline:
         collection.insert_one(item)
         return item
 
-class GbImagePipeline(ImagesPipeline):
+"""class GbImagePipeline(ImagesPipeline):
 
     def get_media_requests(self, item, info):
         image = item.get('display_url')
@@ -31,4 +31,4 @@ class GbImagePipeline(ImagesPipeline):
 
     def item_completed(self, results, item, info):
         item['display_url'] = results[0][1]
-        return item
+        return item"""

@@ -7,17 +7,18 @@ from gb_parse import settings
 from gb_parse.spiders.autoyoula import AutoyoulaSpider
 from gb_parse.spiders.hh import HhSpider
 from gb_parse.spiders.instagram import InstagramSpider
+from gb_parse.spiders.instagram_users import InstagramUsersSpider
 
 if __name__ == '__main__':
     dotenv.load_dotenv('../.env')
-    hash_tags = ['qwertyrc', 'qwertart']
+    users = ['lenochka_kuznecova_', 'elkuznetsova878']
     crawl_settings = Settings()
     crawl_settings.setmodule(settings)
     crawl_proc = CrawlerProcess(settings=crawl_settings)
     #crawl_proc.crawl(AutoyoulaSpider)
     #crawl_proc.crawl(HhSpider)
-    crawl_proc.crawl(InstagramSpider,
-                     start_hash_tags=hash_tags,
+    crawl_proc.crawl(InstagramUsersSpider,
+                     list_users=users,
                      login=os.getenv('INST_LOGIN'),
                      password=os.getenv('INST_PSWD'))
     crawl_proc.start()
