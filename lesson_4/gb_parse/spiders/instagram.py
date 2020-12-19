@@ -1,7 +1,8 @@
 import json
 import scrapy
 import datetime
-from ..loaders import InstagramHashtagLoader, InstagramHashtagMediaLoader
+from ..loaders import InstagramHashtagLoader, InstagramHashtagMediaLoader, InstagramUsersItemLoader
+from scrapy.exceptions import CloseSpider
 
 
 class InstagramSpider(scrapy.Spider):
@@ -9,13 +10,24 @@ class InstagramSpider(scrapy.Spider):
     allowed_domains = ['www.instagram.com']
     login_url = 'https://www.instagram.com/accounts/login/ajax/'
     start_urls = ['https://www.instagram.com/']
-    url_base = 'https://www.instagram.com/graphql/query/?query_hash=9b498c08113f1e09617a1703c22b2f32&variables='
+    api_url = 'https://www.instagram.com/graphql/query/'
+    query_hash_t = {
+        'tag_posts': "9b498c08113f1e09617a1703c22b2f32"
+    }
+    query_hash_u = {
+        'edge_followed_by': 'c76146de99bb02f6415203be841dd25a',
+        'edge_follow': 'd04b0a864b4b54837c0d870b0e77e076'
+    }
 
-    def __init__(self, login, password, start_hash_tags: list, *args, **kwargs):
+    def __init__(self, login, password, start_hash_tags=None, list_users=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.login = login
         self.password = password
-        self.start_hash_tags = [f"/explore/tags/{tag}/" for tag in start_hash_tags]
+        if start_hash_tags:
+            self.start_hash_tags = [f"/explore/tags/{tag}/" for tag in start_hash_tags]
+        if list_users:
+            self.start_point = [list_users[0]]
+            self.end_point = list_users[1]
 
     def parse(self, response):
         try:
@@ -33,8 +45,72 @@ class InstagramSpider(scrapy.Spider):
         except Exception:
             data = response.json()
             if data['authenticated']:
-                for tag in self.start_hash_tags:
-                    yield response.follow(tag, callback=self.parse_tag_page)
+                #for tag in self.start_hash_tags:
+                    #yield response.follow(tag, callback=self.parse_tag_page)
+                for url in self.start_point:
+                    yield response.follow(f'/{url}/', callback=self.parse_user_page)
+
+    def parse_user_page(self, response):
+        data = self.get_js_data(response)['entry_data']['ProfilePage'][0]['graphql']['user']
+        variables = {
+            "id": data['id'],
+            "first": 50
+        }
+        user = {
+            'user_id': data['id'],
+            'username': data['username'],
+            'count': data['edge_followed_by']['count'] + data['edge_follow']['count'],
+            'links': []
+        }
+        # todo "million"
+        for key in self.query_hash_u:
+            url = f'{self.api_url}?query_hash={self.query_hash_u[key]}&variables={json.dumps(variables)}'
+            yield response.follow(url, callback=self.parse_follow_, cb_kwargs=dict(key=key,
+                                                                               user=user))
+
+    def parse_follow_(self, response, key, user):
+        if b'application/json' in response.headers['Content-Type']:
+            edge_follow_ = response.json()['data']['user'][key]
+            yield from self.parse_users_follow_(edge_follow_['edges'], user)
+
+            if edge_follow_['page_info']['has_next_page']:
+                variables = {
+                    "id": user['user_id'],
+                    "first": 50,
+                    "after": edge_follow_['page_info']['end_cursor']
+                }
+                url = f'{self.api_url}?query_hash={self.query_hash_u[key]}&variables={json.dumps(variables)}'
+                yield response.follow(url, callback=self.parse_follow_, cb_kwargs=dict(key=key,
+                                                                                       user=user))
+
+            if len(user['links']) == user['count']:
+                yield from self.get_hands(user)
+                for url in user['hands']:
+                    yield response.follow(f'/{url[1]}/', callback=self.parse_user_page)
+
+    @staticmethod
+    def parse_users_follow_(edges, user):
+        for node in edges:
+            user['links'].append([node['node']['id'], node['node']['username']])
+        yield user
+
+    def get_hands(self, user):
+        user['hands'] = []
+        while len(user['links']):
+            is_hand = user['links'].pop()
+            if user['links'].count(is_hand):
+                user['hands'].append(is_hand)
+                user['links'].remove(is_hand)
+                if is_hand[1] == self.end_point:
+                    self.print_handshake(user)
+                    raise CloseSpider('success')
+        with open(f'{user["username"]}.json', 'w') as f:
+            json.dump(user, f)
+        return user
+
+    def print_handshake(self, user):
+        # todo "path"
+        print(user['username'])
 
     def parse_tag_page(self, response):
         data_hashtag = self.get_js_data(response)['entry_data']['TagPage'][0]['graphql']['hashtag']
@@ -42,14 +118,13 @@ class InstagramSpider(scrapy.Spider):
             yield from self.parse_post(response, node)
 
         while data_hashtag['edge_hashtag_to_media']['page_info']['has_next_page']:
-            end_cursor = data_hashtag['edge_hashtag_to_media']['page_info']['end_cursor']
             params = {
                 "tag_name": data_hashtag['name'],
                 "first": 65,
-                "after": end_cursor
+                "after": data_hashtag['edge_hashtag_to_media']['page_info']['end_cursor']
             }
-            url_query_hash = '{' + ','.join([f'"{key}":"{value}"' if type(value) == str else f'"{key}":{value}' for key,value in params.items()]) + '}'
-            yield response.follow(self.url_base + url_query_hash, callback=self.parse_posts)
+            url = f'{self.api_url}?query_hash={self.query_hash_t["tag_posts"]}&variables={json.dumps(params)}'
+            yield response.follow(url, callback=self.parse_posts)
 
         loader = InstagramHashtagLoader(response=response)
         loader.add_value('date_parse', datetime.datetime.utcnow())
@@ -78,6 +153,7 @@ class InstagramSpider(scrapy.Spider):
         loader.add_value('display_url', data['node']['display_url'])
         yield loader.load_item()
 
-    def get_js_data(self, response) -> dict:
+    @staticmethod
+    def get_js_data(response) -> dict:
         json_text = response.xpath('//script[contains(text(), "window._sharedData")]/text()').get()
         return json.loads(json_text.replace("window._sharedData = ", '')[:-1])

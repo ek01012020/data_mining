@@ -5,7 +5,7 @@
 
 import scrapy
 import time
-from itemloaders.processors import MapCompose
+from itemloaders.processors import MapCompose, Join
 
 
 class GbParseItem(scrapy.Item):

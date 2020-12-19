@@ -11,14 +11,14 @@ from gb_parse.spiders.instagram_users import InstagramUsersSpider
 
 if __name__ == '__main__':
     dotenv.load_dotenv('../.env')
-    users = ['lenochka_kuznecova_', 'elkuznetsova878']
+    users = ['lenochka_kuznecova_', 'olgaagranovskaya']
     crawl_settings = Settings()
     crawl_settings.setmodule(settings)
     crawl_proc = CrawlerProcess(settings=crawl_settings)
     #crawl_proc.crawl(AutoyoulaSpider)
     #crawl_proc.crawl(HhSpider)
-    crawl_proc.crawl(InstagramUsersSpider,
-                     list_users=users,
-                     login=os.getenv('INST_LOGIN'),
-                     password=os.getenv('INST_PSWD'))
+    crawl_proc.crawl(InstagramSpider,
+                      list_users=users,
+                      login=os.getenv('INST_LOGIN'),
+                      password=os.getenv('INST_PSWD'))
     crawl_proc.start()
