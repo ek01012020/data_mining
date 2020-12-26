@@ -1,4 +1,5 @@
 import json
+
 import scrapy
 import datetime
 from ..loaders import InstagramHashtagLoader, InstagramHashtagMediaLoader, InstagramUsersItemLoader
@@ -26,7 +27,7 @@ class InstagramSpider(scrapy.Spider):
         if start_hash_tags:
             self.start_hash_tags = [f"/explore/tags/{tag}/" for tag in start_hash_tags]
         if list_users:
-            self.start_point = [list_users[0]]
+            self.start_point = list_users[0]
             self.end_point = list_users[1]
 
     def parse(self, response):
@@ -47,10 +48,9 @@ class InstagramSpider(scrapy.Spider):
             if data['authenticated']:
                 #for tag in self.start_hash_tags:
                     #yield response.follow(tag, callback=self.parse_tag_page)
-                for url in self.start_point:
-                    yield response.follow(f'/{url}/', callback=self.parse_user_page)
+                yield response.follow(f'/{self.start_point}/', callback=self.parse_user_page)
 
-    def parse_user_page(self, response):
+    def parse_user_page(self, response, parent=None):
         data = self.get_js_data(response)['entry_data']['ProfilePage'][0]['graphql']['user']
         variables = {
             "id": data['id'],
@@ -61,12 +61,15 @@ class InstagramSpider(scrapy.Spider):
             'username': data['username'],
             'count': data['edge_followed_by']['count'] + data['edge_follow']['count'],
             'links': []
-        }
-        # todo "million"
+            }
+        if parent:
+            user['parent'] = parent
+        else:
+            user['parent'] = ''
+
         for key in self.query_hash_u:
             url = f'{self.api_url}?query_hash={self.query_hash_u[key]}&variables={json.dumps(variables)}'
-            yield response.follow(url, callback=self.parse_follow_, cb_kwargs=dict(key=key,
-                                                                               user=user))
+            yield response.follow(url, callback=self.parse_follow_, cb_kwargs=dict(key=key, user=user))
 
     def parse_follow_(self, response, key, user):
         if b'application/json' in response.headers['Content-Type']:
@@ -80,13 +83,30 @@ class InstagramSpider(scrapy.Spider):
                     "after": edge_follow_['page_info']['end_cursor']
                 }
                 url = f'{self.api_url}?query_hash={self.query_hash_u[key]}&variables={json.dumps(variables)}'
-                yield response.follow(url, callback=self.parse_follow_, cb_kwargs=dict(key=key,
-                                                                                       user=user))
+                yield response.follow(url, callback=self.parse_follow_, cb_kwargs=dict(key=key, user=user))
 
             if len(user['links']) == user['count']:
-                yield from self.get_hands(user)
-                for url in user['hands']:
-                    yield response.follow(f'/{url[1]}/', callback=self.parse_user_page)
+                if user['parent'] == '':
+                    parent = user['username']
+                else:
+                    parent = user['parent'] + ' => ' + user['username']
+                user['links'] = self.get_handshake(user)
+                with open('links.txt', 'a') as f:
+                    for link in user['links']:
+                        f.write(' '.join(link) + ' ' + user['parent'] + '\n')
+
+                yield from self.gen_new_start_points(response, parent)
+
+    def gen_new_start_points(self, response, parent):
+        links = []
+        with open('links.txt') as f:
+            for line in f:
+                links.append(line)
+        next_start_user = links.pop(0).split()[1]
+        with open('links.txt', 'w') as f:
+            for link in links:
+                f.write(link)
+            yield response.follow(f'/{next_start_user}/', callback=self.parse_user_page, cb_kwargs=dict(parent=parent))
 
     @staticmethod
     def parse_users_follow_(edges, user):
@@ -94,23 +114,31 @@ class InstagramSpider(scrapy.Spider):
             user['links'].append([node['node']['id'], node['node']['username']])
         yield user
 
-    def get_hands(self, user):
-        user['hands'] = []
+    def get_handshake(self, user):
+        handshake = []
         while len(user['links']):
             is_hand = user['links'].pop()
             if user['links'].count(is_hand):
-                user['hands'].append(is_hand)
+                handshake.append(is_hand)
                 user['links'].remove(is_hand)
                 if is_hand[1] == self.end_point:
                     self.print_handshake(user)
                     raise CloseSpider('success')
-        with open(f'{user["username"]}.json', 'w') as f:
-            json.dump(user, f)
-        return user
+        return handshake
 
     def print_handshake(self, user):
-        # todo "path"
-        print(user['username'])
+        if user['parent'] == '':
+            print(f'{self.start_point} => {self.end_point}')
+            with open('rezult.json', 'w') as f:
+                json.dump(user, f)
+        else:
+            print(f'{user["parent"]} => {user["username"]} => {self.end_point}')
+            with open('rezult.json', 'w') as f:
+                json.dump(user['parent'], f)
+
+    def close(spider, reason):
+        if reason == 'finished':
+            print('Between users no handshake')
 
     def parse_tag_page(self, response):
         data_hashtag = self.get_js_data(response)['entry_data']['TagPage'][0]['graphql']['hashtag']
