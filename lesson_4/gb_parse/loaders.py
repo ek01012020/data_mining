@@ -2,6 +2,7 @@ from urllib.parse import urljoin
 from scrapy.loader import ItemLoader
 from itemloaders.processors import TakeFirst, MapCompose, Join
 from .items import HhVacancyItem, HhCompanyItem
+from .items import InstagramHashtagItem, InstagramHashtagMediaItem, InstagramUsersItem
 
 
 def company_url(text):
@@ -22,3 +23,15 @@ class HhCompanyLoader(ItemLoader):
     company_name_out = TakeFirst()
     company_site_out = TakeFirst()
     company_description_out = Join()
+
+class InstagramHashtagLoader(ItemLoader):
+    default_item_class = InstagramHashtagItem
+    default_output_processor = TakeFirst()
+
+class InstagramHashtagMediaLoader(ItemLoader):
+    default_item_class = InstagramHashtagMediaItem
+    default_output_processor = TakeFirst()
+
+class InstagramUsersItemLoader(ItemLoader):
+    default_item_class = InstagramUsersItem
+    default_output_processor = Join()
