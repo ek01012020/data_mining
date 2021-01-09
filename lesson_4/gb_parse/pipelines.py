@@ -16,14 +16,14 @@ class GbParsePipeline:
 
     def __init__(self):
         dotenv.load_dotenv('../.env')
-        self.db = MongoClient(os.getenv('DATA_BASE'))['parser_i']
+        #self.db = MongoClient(os.getenv('DATA_BASE'))['parser_i']
 
     def process_item(self, item, spider):
-        collection = self.db[spider.name]
-        collection.insert_one(item)
+        #collection = self.db[spider.name]
+        #collection.insert_one(item)
         return item
 
-class GbImagePipeline(ImagesPipeline):
+"""class GbImagePipeline(ImagesPipeline):
 
     def get_media_requests(self, item, info):
         image = item.get('display_url')
@@ -31,4 +31,4 @@ class GbImagePipeline(ImagesPipeline):
 
     def item_completed(self, results, item, info):
         item['display_url'] = results[0][1]
-        return item
+        return item"""

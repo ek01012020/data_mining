@@ -5,7 +5,7 @@
 
 import scrapy
 import time
-from itemloaders.processors import MapCompose
+from itemloaders.processors import MapCompose, Join
 
 
 class GbParseItem(scrapy.Item):
@@ -46,3 +46,8 @@ class InstagramHashtagMediaItem(scrapy.Item):
     node_id = scrapy.Field()
     node_owner = scrapy.Field()
     display_url = scrapy.Field()
+
+class InstagramUsersItem(scrapy.Item):
+    _id = scrapy.Field()
+    edge_followed_by = scrapy.Field()
+    edge_follow = scrapy.Field()
